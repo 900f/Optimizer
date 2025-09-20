@@ -1,899 +1,190 @@
--- Load Rayfield UI Library
-local success, Rayfield = pcall(function()
-    return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-end)
-if not success then
-    warn("Failed to load Rayfield: ", Rayfield)
-    return
-end
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Original GG Language Table
-getgenv().GG = {
-    Language = {
-        CheckboxEnabled = "Enabled",
-        CheckboxDisabled = "Disabled",
-        SliderValue = "Value",
-        DropdownSelect = "Select",
-        DropdownNone = "None",
-        DropdownSelected = "Selected",
-        ButtonClick = "Click",
-        TextboxEnter = "Enter",
-        ModuleEnabled = "Enabled",
-        ModuleDisabled = "Disabled",
-        TabGeneral = "General",
-        TabSettings = "Settings",
-        Loading = "Loading...",
-        Error = "Error",
-        Success = "Success"
-    }
-}
-
-local SelectedLanguage = GG.Language
-
--- Utility Functions
-function convertStringToTable(inputString)
-    local result = {}
-    for value in string.gmatch(inputString, "([^,]+)") do
-        local trimmedValue = value:match("^%s*(.-)%s*$")
-        table.insert(result, trimmedValue)
-    end
-    return result
-end
-
-function convertTableToString(inputTable)
-    return table.concat(inputTable, ", ")
-end
-
--- Roblox Services
-local UserInputService = cloneref(game:GetService('UserInputService'))
-local ContentProvider = cloneref(game:GetService('ContentProvider'))
-local TweenService = cloneref(game:GetService('TweenService'))
-local HttpService = cloneref(game:GetService('HttpService'))
-local TextService = cloneref(game:GetService('TextService'))
-local RunService = cloneref(game:GetService('RunService'))
-local Lighting = cloneref(game:GetService('Lighting'))
-local Players = cloneref(game:GetService('Players'))
-local CoreGui = cloneref(game:GetService('CoreGui'))
-local Debris = cloneref(game:GetService('Debris'))
-local ReplicatedStorage = game:GetService('ReplicatedStorage')
-
-local mouse = Players.LocalPlayer:GetMouse()
-local old_Balls = CoreGui:FindFirstChild('Balls')
-
-if old_Balls then
-    Debris:AddItem(old_Balls, 0)
-end
-
-if not isfolder("inv") then
-    makefolder("inv")
-end
-
--- Connections Manager
-local Connections = setmetatable({
-    disconnect = function(self, connection)
-        if not self[connection] then
-            return
-        end
-        self[connection]:Disconnect()
-        self[connection] = nil
-    end,
-    disconnect_all = function(self)
-        for _, value in self do
-            if typeof(value) == 'function' then
-                continue
-            end
-            value:Disconnect()
-        end
-    end
-}, { __index = Connections })
-
--- Util Table
-local Util = setmetatable({
-    map = function(self, value, in_min, in_max, out_min, out_max)
-        return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
-    end,
-    viewport_point_to_world = function(self, location, distance)
-        local unit_ray = workspace.CurrentCamera:ScreenPointToRay(location.X, location.Y)
-        return unit_ray.Origin + unit_ray.Direction * distance
-    end,
-    get_offset = function(self)
-        local viewport_size_Y = workspace.CurrentCamera.ViewportSize.Y
-        return self:map(viewport_size_Y, 0, 2560, 8, 56)
-    end
-}, { __index = Util })
-
--- Config System
-local Config = setmetatable({
-    save = function(self, file_name, config)
-        local success_save, result = pcall(function()
-            local flags = HttpService:JSONEncode(config)
-            writefile('Balls/'..file_name..'.json', flags)
-        end)
-        if not success_save then
-            warn('Failed to save config: ', result)
-        end
-    end,
-    load = function(self, file_name, config)
-        local success_load, result = pcall(function()
-            if not isfile('Balls/'..file_name..'.json') then
-                self:save(file_name, config)
-                return
-            end
-            local flags = readfile('Balls/'..file_name..'.json')
-            if not flags then
-                self:save(file_name, config)
-                return
-            end
-            return HttpService:JSONDecode(flags)
-        end)
-        if not success_load then
-            warn('Failed to load config: ', result)
-        end
-        if not result then
-            result = {
-                _flags = {},
-                _keybinds = {},
-                _library = {}
-            }
-        end
-        return result
-    end
-}, { __index = Config })
-
--- Library Setup
-local Library = {
-    _config = Config:load(game.GameId),
-    _choosing_keybind = false,
-    _device = nil,
-    _ui_open = true,
-    _ui_scale = 1,
-    _ui_loaded = false,
-    _ui = nil,
-    _dragging = false,
-    _drag_start = nil,
-    _container_position = nil
-}
-Library.__index = Library
-
--- Notification using Rayfield
-function Library.SendNotification(settings)
-    Rayfield:Notify({
-        Title = settings.title or "Notification",
-        Content = settings.text or "This is a notification.",
-        Duration = settings.duration or 5,
-        Image = 4483362458
-    })
-end
-
--- Device Detection
-function Library:get_device()
-    local device = 'Unknown'
-    if not UserInputService.TouchEnabled and UserInputService.KeyboardEnabled and UserInputService.MouseEnabled then
-        device = 'PC'
-    elseif UserInputService.TouchEnabled then
-        device = 'Mobile'
-    elseif UserInputService.GamepadEnabled then
-        device = 'Console'
-    end
-    self._device = device
-end
-
--- Placeholder Implementations for Missing Functions
--- Replace these with actual implementations from the original script
-local Auto_Parry = {
-    Main = function()
-        warn("Auto_Parry.Main not implemented. Add logic from original script.")
-        -- Example: Simulate parry action
-        -- local player = Players.LocalPlayer
-        -- local char = player.Character
-        -- if char and getgenv().Auto_Parry then
-        --     -- Add parry logic, e.g., fire a remote event
-        -- end
+-- Decode the base64 encoded script
+local base64 = {
+    decode = function(data)
+        local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+        data = string.gsub(data, '[^'..b..'=]', '')
+        return (data:gsub('.', function(x)
+            if (x == '=') then return '' end
+            local r,f='',(b:find(x)-1)
+            for i=6,1,-1 do r=r..(f%2^i - f%2^(i-1) > 0 and '1' or '0') end
+            return r;
+        end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
+            if (#x ~= 8) then return '' end
+            local c=0
+            for i=1,8 do c=c + (x:sub(i,i)=='1' and 2^(8-i) or 0) end
+            return string.char(c)
+        end))
     end
 }
 
-local Auto_Spam = {
-    Main = function()
-        warn("Auto_Spam.Main not implemented. Add logic from original script.")
-        -- Example: Simulate spamming an action
-        -- if getgenv().Auto_Spam then
-        --     -- Fire remote or simulate input
-        -- end
-    end
-}
-
-local ESP = {
-    Draw = function()
-        warn("ESP.Draw not implemented. Add logic from original script.")
-        -- Example: Basic ESP for players
-        -- for _, player in pairs(Players:GetPlayers()) do
-        --     if player ~= Players.LocalPlayer and player.Character then
-        --         -- Add highlight or billboard GUI
-        --     end
-        -- end
-    end,
-    Remove = function()
-        warn("ESP.Remove not implemented. Add logic from original script.")
-        -- Example: Remove ESP highlights
-    end
-}
-
-local Ball_ESP = {
-    Draw = function()
-        warn("Ball_ESP.Draw not implemented. Add logic from original script.")
-        -- Example: Highlight balls in workspace
-        -- for _, ball in pairs(workspace:GetDescendants()) do
-        --     if ball.Name == "Ball" then
-        --         -- Add highlight
-        --     end
-        -- end
-    end,
-    Remove = function()
-        warn("Ball_ESP.Remove not implemented. Add logic from original script.")
-    end
-}
-
-local AutoPlayModule = {
-    runThread = function()
-        warn("AutoPlayModule.runThread not implemented. Add logic from original script.")
-        -- Example: Automate gameplay
-    end,
-    finishThread = function()
-        warn("AutoPlayModule.finishThread not implemented. Add logic from original script.")
-    end
-}
-
-getgenv().updateSword = function()
-    warn("updateSword not implemented. Add logic from original script.")
-    -- Example: Change sword skin
-    -- local char = Players.LocalPlayer.Character
-    -- if char and getgenv().swordModel then
-    --     -- Apply skin to sword
-    -- end
-end
-
--- Create Rayfield Window
-local Window = Rayfield:CreateWindow({
-    Name = "Balls.lol",
-    LoadingTitle = SelectedLanguage.Loading,
-    LoadingSubtitle = "by xAI",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "Balls",
-        FileName = tostring(game.GameId)
-    },
-    Discord = {
-        Enabled = true,
-        Invite = "tWK2SqrrFf",
-        RememberJoins = true
-    },
-    KeySystem = false
+local encoded = [[Z2V0Z2VudigpLkdHID0gewogICAgTGFuZ3VhZ2UgPSB7CiAgICAgICAgQ2hlY2tib3hFbmFibGVkID0gIkVuYWJsZWQiLAogICAgICAgIENoZWNrYm94RGlzYWJsZWQgPSAiRGlzYWJsZWQiLAogICAgICAgIFNsaWRlclZhbHVlID0gIlZhbHVlIiwKICAgICAgICBEcm9wZG93blNlbGVjdCA9ICJTZWxlY3QiLAogICAgICAgIERyb3Bkb3duTm9uZSA9ICJOb25lIiwKICAgICAgICBEcm9wZG93blNlbGVjdGVkID0gIlNlbGVjdGVkIiwKICAgICAgICBCdXR0b25DbGljayA9ICJDbGljayIsCiAgICAgICAgVGV4dGJveEVudGVyID0gIkVudGVyIiwKICAgICAgICBNb2R1bGVFbmFibGVkID0gIkVuYWJsZWQiLAogICAgICAgIE1vZHVsZURpc2FibGVkID0gIkRpc2FibGVkIiwKICAgICAgICBUYWJHZW5lcmFsID0gIkdlbmVyYWwiLAogICAgICAgIFRhYlNldHRpbmdzID0gIlNldHRpbmdzIiwKICAgICAgICBMb2FkaW5nID0gIkxvYWRpbmcuLi4iLAogICAgICAgIEVycm9yID0gIkVycm9yIiwKICAgICAgICBTdWNjZXNzID0gIlN1Y2Nlc3MiCiAgICB9Cn0KCmxvY2FsIFNlbGVjdGVkTGFuZ3VhZ2UgPSBHRy5MYW5ndWFnZQoKZnVuY3Rpb24gY29udmVydFN0cmluZ1RvVGFibGUoaW5wdXRTdHJpbmcpCiAgICBsb2NhbCByZXN1bHQgPSB7fQogICAgZm9yIHZhbHVlIGluIHN0cmluZy5nbWF0Y2goaW5wdXRTdHJpbmcsICIoW14sXSspIikgZG8KICAgICAgICBsb2NhbCB0cmltbWVkVmFsdWUgPSB2YWx1ZTptYXRjaCgiXiVzKiguLSklcyokIikKICAgICAgICB0YWJsZS5pbnNlcnQocmVzdWx0LCB0cmltbWVkVmFsdWUpCiAgICBlbmQKCiAgICByZXR1cm4gcmVzdWx0CmVuZAoKZnVuY3Rpb24gY29udmVydFRhYmxlVG9TdHJpbmcoaW5wdXRUYWJsZSkKICAgIHJldHVybiB0YWJsZS5jb25jYXQoaW5wdXRUYWJsZSwgIiwgIikKZW5kCgpsb2NhbCBVc2VySW5wdXRTZXJ2aWNlID0gY2xvbmVyZWYoZ2FtZTpHZXRTZXJ2aWNlKCdVc2VySW5wdXRTZXJ2aWNlJykpCmxvY2FsIENvbnRlbnRQcm92aWRlciA9IGNsb25lcmVmKGdhbWU6R2V0U2VydmljZSgnQ29udGVudFByb3ZpZGVyJykpCmxvY2FsIFR3ZWVuU2VydmljZSA9IGNsb25lcmVmKGdhbWU6R2V0U2VydmljZSgnVHdlZW5TZXJ2aWNlJykpCmxvY2FsIEh0dHBTZXJ2aWNlID0gY2xvbmVyZWYoZ2FtZTpHZXRTZXJ2aWNlKCdIdHRwU2VydmljZScpKQpsb2NhbCBUZXh0U2VydmljZSA9IGNsb25lcmVmKGdhbWU6R2V0U2VydmljZSgnVGV4dFNlcnZpY2UnKSkKbG9jYWwgUnVuU2VydmljZSA9IGNsb25lcmVmKGdhbWU6R2V0U2VydmljZSgnUnVuU2VydmljZScpKQpsb2NhbCBMaWdodGluZyA9IGNsb25lcmVmKGdhbWU6R2V0U2VydmljZSgnTGlnaHRpbmcnKSkKbG9jYWwgUGxheWVycyA9IGNsb25lcmVmKGdhbWU6R2V0U2VydmljZSgnUGxheWVycycpKQpsb2NhbCBDb3JlR3VpID0gY2xvbmVyZWYoZ2FtZTpHZXRTZXJ2aWNlKCdDb3JlR3VpJykpCmxvY2FsIERlYnJpcyA9IGNsb25lcmVmKGdhbWU6R2V0U2VydmljZSgnRGVicmlzJykpCgpsb2NhbCBtb3VzZSA9IFBsYXllcnMuTG9jYWxQbGF5ZXI6R2V0TW91c2UoKQpsb2NhbCBvbGRfQmFsbHMgPSBDb3JlR3VpOkZpbmRGaXJzdENoaWxkKCdCYWxscycpCgppZiBvbGRfQmFsbHMgdGhlbgogICAgRGVicmlzOkFkZEl0ZW0ob2xkX0JhbGxzLCAwKQplbmQKCmlmIG5vdCBpc2ZvbGRlcigiaW52IikgdGhlbgogICAgbWFrZWZvbGRlcigiaW52IikKZW5kCgoKbG9jYWwgQ29ubmVjdGlvbnMgPSBzZXRtZXRhdGFibGUoewogICAgZGlzY29ubmVjdCA9IGZ1bmN0aW9uKHNlbGYsIGNvbm5lY3Rpb24pCiAgICAgICAgaWYgbm90IHNlbGZbY29ubmVjdGlvbl0gdGhlbgogICAgICAgICAgICByZXR1cm4KICAgICAgICBlbmQKICAgIAogICAgICAgIHNlbGZbY29ubmVjdGlvbl06RGlzY29ubmVjdCgpCiAgICAgICAgc2VsZltjb25uZWN0aW9uXSA9IG5pbAogICAgZW5kLAogICAgZGlzY29ubmVjdF9hbGwgPSBmdW5jdGlvbihzZWxmKQogICAgICAgIGZvciBfLCB2YWx1ZSBpbiBzZWxmIGRvCiAgICAgICAgICAgIGlmIHR5cGVvZih2YWx1ZSkgPT0gJ2Z1bmN0aW9uJyB0aGVuCiAgICAgICAgICAgICAgICBjb250aW51ZQogICAgICAgICAgICBlbmQKICAgIAogICAgICAgICAgICB2YWx1ZTpEaXNjb25uZWN0KCkKICAgICAgICBlbmQKICAgIGVuZAp9LCBDb25uZWN0aW9ucykKCgpsb2NhbCBVdGlsID0gc2V0bWV0YXRhYmxlKHsKICAgIG1hcCA9IGZ1bmN0aW9uKHNlbGY6IGFueSwgdmFsdWU6IG51bWJlciwgaW5fbWluaW11bTogbnVtYmVyLCBpbl9tYXhpbXVtOiBudW1iZXIsIG91dF9taW5pbXVtOiBudW1iZXIsIG91dF9tYXhpbXVtOiBudW1iZXIpCiAgICAgICAgcmV0dXJuICh2YWx1ZSAtIGluX21pbmltdW0pICogKG91dF9tYXhpbXVtIC0gb3V0X21pbmltdW0pIC8gKGluX21heGltdW0gLSBpbl9taW5pbXVtKSArIG91dF9taW5pbXVtCiAgICBlbmQsCiAgICB2aWV3cG9ydF9wb2ludF90b193b3JsZCA9IGZ1bmN0aW9uKHNlbGY6IGFueSwgbG9jYXRpb246IGFueSwgZGlzdGFuY2U6IG51bWJlcikKICAgICAgICBsb2NhbCB1bml0X3JheSA9IHdvcmtzcGFjZS5DdXJyZW50Q2FtZXJhOlNjcmVlblBvaW50VG9SYXkobG9jYXRpb24uWCwgbG9jYXRpb24uWSkKCiAgICAgICAgcmV0dXJuIHVuaXRfcmF5Lk9yaWdpbiArIHVuaXRfcmF5LkRpcmVjdGlvbiAqIGRpc3RhbmNlCiAgICBlbmQsCiAgICBnZXRfb2Zmc2V0ID0gZnVuY3Rpb24oc2VsZjogYW55KQogICAgICAgIGxvY2FsIHZpZXdwb3J0X3NpemVfWSA9IHdvcmtzcGFjZS5DdXJyZW50Q2FtZXJhLlZpZXdwb3J0U2l6ZS5ZCgogICAgICAgIHJldHVybiBzZWxmOm1hcCh2aWV3cG9ydF9zaXplX1ksIDAsIDI1NjAsIDgsIDU2KQogICAgZW5kCn0sIFV0aWwpCgoKbG9jYWwgQWNyeWxpY0JsdXIgPSB7fQpBY3J5bGljQmx1ci5fX2luZGV4ID0gQWNyeWxpY0JsdXIKCgpmdW5jdGlvbiBBY3J5bGljQmx1ci5uZXcob2JqZWN0OiBHdWlPYmplY3QpCiAgICBsb2NhbCBzZWxmID0gc2V0bWV0YXRhYmxlKHsKICAgICAgICBfb2JqZWN0ID0gb2JqZWN0LAogICAgICAgIF9mb2xkZXIgPSBuaWwsCiAgICAgICAgX2ZyYW1lID0gbmlsLAogICAgICAgIF9yb290ID0gbmlsCiAgICB9LCBBY3J5bGljQmx1cikKCiAgICBzZWxmOnNldHVwKCkKCiAgICByZXR1cm4gc2VsZgplbmQKCgpmdW5jdGlvbiBBY3J5bGljQmx1cjpjcmVhdGVfZm9sZGVyKCkKICAgIGxvY2FsIG9sZF9mb2xkZXIgPSB3b3Jrc3BhY2UuQ3VycmVudENhbWVyYTpGaW5kRmlyc3RDaGlsZCgnQWNyeWxpY0JsdXInKQoKICAgIGlmIG9sZF9mb2xkZXIgdGhlbgogICAgICAgIERlYnJpczpBZGRJdGVtKG9sZF9mb2xkZXIsIDApCiAgICBlbmQKCiAgICBsb2NhbCBmb2xkZXIgPSBJbnN0YW5jZS5uZXcoJ0ZvbGRlcicpCiAgICBmb2xkZXIuTmFtZSA9ICdBY3J5bGljQmx1cicKICAgIGZvbGRlci5QYXJlbnQgPSB3b3Jrc3BhY2UuQ3VycmVudENhbWVyYQoKICAgIHNlbGYuX2ZvbGRlciA9IGZvbGRlcgplbmQKCgpmdW5jdGlvbiBBY3J5bGljQmx1cjpjcmVhdGVfZGVwdGhfb2ZfZmllbGRzKCkKICAgIGxvY2FsIGRlcHRoX29mX2ZpZWxkcyA9IExpZ2h0aW5nOkZpbmRGaXJzdENoaWxkKCdBY3J5bGljQmx1cicpIG9yIEluc3RhbmNlLm5ldygnRGVwdGhPZkZpZWxkRWZmZWN0JykKICAgIGRlcHRoX29mX2ZpZWxkcy5GYXJJbnRlbnNpdHkgPSAwCiAgICBkZXB0aF9vZl9maWVsZHMuRm9jdXNEaXN0YW5jZSA9IDAuMDUKICAgIGRlcHRoX29mX2ZpZWxkcy5JbkZvY3VzUmFkaXVzID0gMC4xCiAgICBkZXB0aF9vZl9maWVsZHMuTmVhckludGVuc2l0eSA9IDEKICAgIGRlcHRoX29mX2ZpZWxkcy5OYW1lID0gJ0FjcnlsaWNCbHVyJwogICAgZGVwdGhfb2ZfZmllbGRzLlBhcmVudCA9IExpZ2h0aW5nCgogICAgZm9yIF8sIG9iamVjdCBpbiBMaWdodGluZzpHZXRDaGlsZHJlbigpIGRvCiAgICAgICAgaWYgbm90IG9iamVjdDpJc0EoJ0RlcHRoT2ZGaWVsZEVmZmVjdCcpIHRoZW4KICAgICAgICAgICAgY29udGludWUKICAgICAgICBlbmQKCiAgICAgICAgaWYgb2JqZWN0ID09IGRlcHRoX29mX2ZpZWxkcyB0aGVuCiAgICAgICAgICAgIGNvbnRpbnVlCiAgICAgICAgZW5kCgogICAgICAgIENvbm5lY3Rpb25zW29iamVjdF0gPSBvYmplY3Q6R2V0UHJvcGVydHlDaGFuZ2VkU2lnbmFsKCdGYXJJbnRlbnNpdHknKTpDb25uZWN0KGZ1bmN0aW9uKCkKICAgICAgICAgICAgb2JqZWN0LkZhckludGVuc2l0eSA9IDAKICAgICAgICBlbmQpCgogICAgICAgIG9iamVjdC5GYXJJbnRlbnNpdHkgPSAwCiAgICBlbmQKZW5kCgoKZnVuY3Rpb24gQWNyeWxpY0JsdXI6Y3JlYXRlX2ZyYW1lKCkKICAgIGxvY2FsIGZyYW1lID0gSW5zdGFuY2UubmV3KCdGcmFtZScpCiAgICBmcmFtZS5TaXplID0gVURpbTIubmV3KDEsIDAsIDEsIDApCiAgICBmcmFtZS5Qb3NpdGlvbiA9IFVEaW0yLm5ldygwLjUsIDAsIDAuNSwgMCkKICAgIGZyYW1lLkFuY2hvclBvaW50ID0gVmVjdG9yMi5uZXwoMC41LCAwLjUpCiAgICBmcmFtZS5CYWNrZ3JvdW5kVHJhbnNwYXJlbmN5ID0gMQogICAgZnJhbWUuUGFyZW50ID0gc2VsZi5fb2JqZWN0CgogICAgc2VsZi5fZnJhbWUgPSBmcmFtZQplbmQKCgpmdW5jdGlvbiBBY3J5bGljQmx1cjpjcmVhdGVfcm9vdCgpCiAgICBsb2NhbCBwYXJ0ID0gSW5zdGFuY2UubmV3KCdQYXJ0JykKICAgIHBhcnQuTmFtZSA9ICdSb290JwogICAgcGFydC5Db2xvciA9IENvbG9yMy5uZXcoMCwgMCwgMCkKICAgIHBhcnQuTWF0ZXJpYWwgPSBFbnVtLk1hdGVyaWFsLkdsYXNzCiAgICBwYXJ0LlNpemUgPSBWZWN0b3IzLm5ldygxLCAxLCAwKSAKICAgIHBhcnQuQW5jaG9yZWQgPSB0cnVlCiAgICBwYXJ0LkNhbkNvbGxpZGUgPSBmYWxzZQogICAgcGFydC5DYW5RdWVyeSA9IGZhbHNlCiAgICBwYXJ0LkxvY2tlZCA9IHRydWUKICAgIHBhcnQuQ2FzdFNoYWRvdyA9IGZhbHNlCiAgICBwYXJ0LlRyYW5zcGFyZW5jeSA9IDAuOTgKICAgIHBhcnQuUGFyZW50ID0gc2VsZi5fZm9sZGVyCgoKICAgIGxvY2FsIHNwZWNpYWxNZXNoID0gSW5zdGFuY2UubmV3KCdTcGVjaWFsTWVzaCcpCiAgICBzcGVjaWFsTWVzaC5NZXNoVHlwZSA9IEVudW0uTWVzaFR5cGUuQnJpY2sgIAogICAgc3BlY2lhbE1lc2guT2Zmc2V0ID0gVmVjdG9yMy5uZXwoMCwgMCwgLTAuMDAwMDAxKSAgCiAgICBzcGVjaWFsTWVzaC5QYXJlbnQgPSBwYXJ0CgogICAgc2VsZi5fcm9vdCA9IHBhcnQgCmVuZAoKCmZ1bmN0aW9uIEFjcnlsaWNCbHVyOnNldHVwKCkKICAgIHNlbGY6Y3JlYXRlX2RlcHRoX29mX2ZpZWxkcygpCiAgICBzZWxmOmNyZWF0ZV9mb2xkZXIoKQogICAgc2VsZjpjcmVhdGVfcm9vdCgpCiAgICAKICAgIHNlbGY6Y3JlYXRlX2ZyYW1lKCkKICAgIHNlbGY6cmVuZGVyKDAuMDAxKQoKICAgIHNlbGY6Y2hlY2tfcXVhbGl0eV9sZXZlbCgpCmVuZAoKCmZ1bmN0aW9uIEFjcnlsaWNCbHVyOnJlbmRlcihkaXN0YW5jZTogbnVtYmVyKQogICAgbG9jYWwgcG9zaXRpb25zID0gewogICAgICAgIHRvcF9sZWZ0ID0gVmVjdG9yMi5uZXwoKSwKICAgICAgICB0b3BfcmlnaHQgPSBWZWN0b3IyLm5ldygpLAogICAgICAgIGJvdHRvbV9yaWdodCA9IFZlY3RvcjIubmV3KCksCiAgICB9CgogICAgbG9jYWwgZnVuY3Rpb24gdXBkYXRlX3Bvc2l0aW9ucyhzaXplOiBhbnksIHBvc2l0aW9uOiBhbnkpCiAgICAgICAgcG9zaXRpb25zLnRvcF9sZWZ0ID0gcG9zaXRpb24KICAgICAgICBwb3NpdGlvbnMudG9wX3JpZ2h0ID0gcG9zaXRpb24gKyBWZWN0b3IyLm5ldyhzaXplLlgsIDApCiAgICAgICAgcG9zaXRpb25zLmJvdHRvbV9yaWdodCA9IHBvc2l0aW9uICsgc2l6ZQogICAgZW5kCgogICAgbG9jYWwgZnVuY3Rpb24gdXBkYXRlKCkKICAgICAgICBsb2NhbCB0b3BfbGVmdCA9IHBvc2l0aW9ucy50b3BfbGVmdAogICAgICAgIGxvY2FsIHRvcF9yaWdodCA9IHBvc2l0aW9ucy50b3BfcmlnaHQKICAgICAgICBsb2NhbCBib3R0b21fcmlnaHQgPSBwb3NpdGlvbnMuYm90dG9tX3JpZ2h0CgogICAgICAgIGxvY2FsIHRvcF9sZWZ0M0QgPSBVdGlsOnZpZXdwb3J0X3BvaW50X3RvX3dvcmxkKHRvcF9sZWZ0LCBkaXN0YW5jZSkKICAgICAgICBsb2NhbCB0b3BfcmlnaHQzRCA9IFV0aWw6dmlld3BvcnRfcG9pbnRfdG9fd29ybGQodG9wX3JpZ2h0LCBkaXN0YW5jZSkKICAgICAgICBsb2NhbCBib3R0b21fcmlnaHQzRCA9IFV0aWw6dmlld3BvcnRfcG9pbnRfdG9fd29ybGQoYm90dG9tX3JpZ2h0LCBkaXN0YW5jZSkKCiAgICAgICAgbG9jYWwgd2lkdGggPSAodG9wX3JpZ2h0M0QgLSB0b3BfbGVmdDNEKS5NYWduaXR1ZGUKICAgICAgICBsb2NhbCBoZWlnaHQgPSAodG9wX3JpZ2h0M0QgLSBib3R0b21fcmlnaHQzRCkuTWFnbml0dWRlCgogICAgICAgIGlmIG5vdCBzZWxmLl9yb290IHRoZW4KICAgICAgICAgICAgcmV0dXJuCiAgICAgICAgZW5kCgogICAgICAgIHNlbGYuX3Jvb3QuQ0ZyYW1lID0gQ0ZyYW1lLmZyb21NYXRyaXgoKHRvcF9sZWZ0M0QgKyBib3R0b21fcmlnaHQzRCkgLyAyLCB3b3Jrc3BhY2UuQ3VycmVudENhbWVyYS5DRnJhbWUuWFZlY3Rvciwgd29ya3NwYWNlLkN1cnJlbnRDYW1lcmEuQ0ZyYW1lLllWZWN0b3IsIHdvcmtzcGFjZS5DdXJyZW50Q2FtZXJhLkNGcmFtZS5aVmVjdG9yKQogICAgICAgIHNlbGYuX3Jvb3QuTWVzaC5TY2FsZSA9IFZlY3RvcjMubmV3KHdpZHRoLCBoZWlnaHQsIDApCiAgICBlbmQKCiAgICBsb2NhbCBmdW5jdGlvbiBvbl9jaGFuZ2UoKQogICAgICAgIGxvY2FsIG9mZnNldCA9IFV0aWw6Z2V0X29mZnNldCgpCiAgICAgICAgbG9jYWwgc2l6ZSA9IHNlbGYuX2ZyYW1lLkFic29sdXRlU2l6ZSAtIFZlY3RvcjIubmV3KG9mZnNldCwgb2Zmc2V0KQogICAgICAgIGxvY2FsIHBvc2l0aW9uID0gc2VsZi5fZnJhbWUuQWJzb2x1dGVQb3NpdGlvbiArIFZlY3RvcjIubmV3KG9mZnNldCAvIDIsIG9mZnNldCAvIDIpCgogICAgICAgIHVwZGF0ZV9wb3NpdGlvbnMoc2l6ZSwgcG9zaXRpb24pCiAgICAgICAgdGFzay5zcGF3bih1cGRhdGUpCiAgICBlbmQKCiAgICBDb25uZWN0aW9uc1snY2ZyYW1lX3VwZGF0ZSddID0gd29ya3NwYWNlLkN1cnJlbnRDYW1lcmE6R2V0UHJvcGVydHlDaGFuZ2VkU2lnbmFsKCdDRnJhbWUnKTpDb25uZWN0KHVwZGF0ZSkKICAgIENvbm5lY3Rpb25zWyd2aWV3cG9ydF9zaXplX3VwZGF0ZSddID0gd29ya3NwYWNlLkN1cnJlbnRDYW1lcmE6R2V0UHJvcGVydHlDaGFuZ2VkU2lnbmFsKCdWaWV3cG9ydFNpemUnKTpDb25uZWN0KHVwZGF0ZSkKICAgIENvbm5lY3Rpb25zWydmaWVsZF9vZl92aWV3X3VwZGF0ZSddID0gd29ya3NwYWNlLkN1cnJlbnRDYW1lcmE6R2V0UHJvcGVydHlDaGFuZ2VkU2lnbmFsKCdGaWVsZE9mVmlldycpOkNvbm5lY3QodXBkYXRlKQoKICAgIENvbm5lY3Rpb25zWydmcmFtZV9hYnNvbHV0ZV9wb3NpdGlvbiddID0gc2VsZi5fZnJhbWU6R2V0UHJvcGVydHlDaGFuZ2VdU2lnbmFsKCdBYnNvbHV0ZVBvc2l0aW9uJyk6Q29ubmVjdChvbl9jaGFuZ2UpCiAgICBDb25uZWN0aW9uc1snZnJhbWVfYWJzb2x1dGVfc2l6ZSddID0gc2VsZi5fZnJhbWU6R2V0UHJvcGVydHlDaGFuZ2VkU2lnbmFsKCdBYnNvbHV0ZVNpemUnKTpDb25uZWN0KG9uX2NoYW5nZSkKICAgIAogICAgdGFzay5zcGF3bih1cGRhdGUpCmVuZAoKCmZ1bmN0aW9uIEFjcnlsaWNCbHVyOmNoZWNrX3F1YWxpdHlfbGV2ZWwoKQogICAgbG9jYWwgZ2FtZV9zZXR0aW5ncyA9IFVzZXJTZXR0aW5ncygpLkdhbWVTZXR0aW5ncwogICAgbG9jYWwgcXVhbGl0eV9sZXZlbCA9IGdhbWVfc2V0dGluZ3MuU2F2ZWRRdWFsaXR5TGV2ZWwuVmFsdWUKCiAgICBpZiBxdWFsaXR5X2xldmVsIDwgOCB0aGVuCiAgICAgICAgc2VsZjpjaGFuZ2VfdmlzaWJsaXR5KGZhbHNlKQogICAgZW5kCgogICAgQ29ubmVjdGlvbnNbJ3F1YWxpdHlfbGV2ZWwnXSA9IGdhbWVfc2V0dGluZ3M6R2V0UHJvcGVydHlDaGFuZ2VkU2lnbmFsKCdTYXZlZFF1YWxpdHlMZXZlbCcpOkNvbm5lY3QoZnVuY3Rpb24oKQogICAgICAgIGxvY2FsIGdhbWVfc2V0dGluZ3MgPSBVc2VyU2V0dGluZ3MoKS5HYW1lU2V0dGluZ3MKICAgICAgICBsb2NhbCBxdWFsaXR5X2xldmVsID0gZ2FtZV9zZXR0aW5ncy5TYXZlZFF1YWxpdHlMZXZlbC5WYWx1ZQoKICAgICAgICBzZWxmOmNoYW5nZV92aXNpYmxpdHkocXVhbGl0eV9sZXZlbCA+PSA4KQogICAgZW5kKQplbmQKCgpmdW5jdGlvbiBBY3J5bGljQmx1cjpjaGFuZ2VfdmlzaWJsaXR5KHN0YXRlOiBib29sZWFuKQogICAgc2VsZi5fcm9vdC5UcmFuc3BhcmVuY3kgPSBzdGF0ZSBhbmQgMC45OCBvciAxCmVuZAoKCmxvY2FsIENvbmZpZyA9IHNldG1ldGF0YWJsZSh7CiAgICBzYXZlID0gZnVuY3Rpb24oc2VsZjogYW55LCBmaWxlX25hbWU6IGFueSwgY29uZmlnOiBhbnkpCiAgICAgICAgbG9jYWwgc3VjY2Vzc19zYXZlLCByZXN1bHQgPSBwY2FsbChmdW5jdGlvbigpCiAgICAgICAgICAgIGxvY2FsIGZsYWdzID0gSHR0cFNlcnZpY2U6SlNPTkVuY29kZShjb25maWcpCiAgICAgICAgICAgIHdyaXRlZmlsZSgnQmFsbHMvJy4uZmlsZV9uYW1lLi4nLmpzb24nLCBmbGFncykKICAgICAgICBlbmQpCiAgICAKICAgICAgICBpZiBub3Qgc3VjY2Vzc19zYXZlIHRoZW4KICAgICAgICAgICAgd2FybignZmFpbGVkIHRvIHNhdmUgY29uZmlnJywgcmVzdWx0KQogICAgICAgIGVuZAogICAgZW5kLAogICAgbG9hZCA9IGZ1bmN0aW9uKHNlbGY6IGFueSwgZmlsZV9uYW1lOiBhbnksIGNvbmZpZzogYW55KQogICAgICAgIGxvY2FsIHN1Y2Nlc3NfbG9hZCwgcmVzdWx0ID0gcGNhbGwoZnVuY3Rpb24oKQogICAgICAgICAgICBpZiBub3QgaXNmaWxlKCdCYWxscy8nLi5maWxlX25hbWUuLicuanNvbicpIHRoZW4KICAgICAgICAgICAgICAgIHNlbGY6c2F2ZShmaWxlX25hbWUsIGNvbmZpZykKICAgICAgICAgICAgICAgIHJldHVybgogICAgICAgICAgICBlbmQKICAgICAgICAgICAgbG9jYWwgZmxhZ3MgPSByZWFkZmlsZSgnQmFsbHMvJy4uZmlsZV9uYW1lLi4nLmpzb24nKQogICAgICAgICAgICBpZiBub3QgZmxhZ3MgdGhlbgogICAgICAgICAgICAgICAgc2VsZjpzYXRlKGZpbGVfbmFtc3MsIGNvbmZpZykKICAgICAgICAgICAgICAgIHJldHVybgogICAgICAgICAgICBlbmQKICAgICAgICAgICAgcmV0dXJuIEh0dHBTZXJ2aWNlOkpTT05EZWNvZGUoZmxhZ3MpCiAgICAgICAgZW5kKQogICAgICAgIGlmIG5vdCBzdWNjZXNzX2xvYWQgdGhlbiAgICAgICAgICAgIHdhcm4oJ2ZhaWxlZCB0byBsb2FkIGNvbmZpZycsIHJlc3VsdCkKICAgICAgICBlbmQKICAgICAgICBpZiBub3QgcmVzdWx0IHRoZW4gICAgICAgICAgICByZXN1bHQgPSB7IF9mbGFncyA9IHt9LCBfa2V5YmluZHMgPSB7fSwgX2xpYnJhcnkgPSB7fSB9CiAgICAgICAgZW5kCiAgICAgICAgcmV0dXJuIHJlc3VsdAogICAgZW5kfSwgQ29uZmlnKQoKCmxvY2FsIExpYnJhcnkgPSB7CiAgICBfY29uZmlnID0gQ29uZmlnOmxvYWQoZ2FtZS5HYW1lSWQpLAogICAgX2Nob29zaW5nX2tleWJpbmQgPSBmYWxzZSwgICAgX2RldmljZSA9IG5pbCwKICAgIF9fX2luZGV4ID0gTGlicmFyeQp9CgpjdW5jdGlvbiBMaWJyYXJ5Lm5ldygpICAgIGxvY2FsIHNlbGYgPSBzZXRtZXRhdGFibGUoeyAgICAgICAgX2xvYWRlZCA9IGZhbHNlLCAgICAgICAgX3RhYiA9IDAsICAgIH0sIExpYnJhcnkpICAgIHJldHVybiBzZWxmZW5kCgoKZnVuY3Rpb24gTGlicmFyeTpTZW5kTm90aWZpY2F0aW9uKHNldHRpbmdzKQogICAgUmF5ZmllbGQ6Tm90aWZ5KHsKICAgICAgICBUaXRsZSA9IHNldHRpbmdzLnRpdGxlIG9yICJOb3RpZmljYXRpb24gVGl0bGUiLAogICAgICAgIENvbnRlbnQgPSBzZXR0aW5ncy50ZXh0IG9yICJUaGlzIGlzIHRoZSBib2R5IG9mIHRoZSBub3RpZmljYXRpb24uIiwKICAgICAgICBEdXJhdGlvbiA9IHNldHRpbmdzLmR1cmF0aW9uIG9yIDUsCiAgICAgICAgSW1hZ2UgPSBuaWwsCiAgICB9KQplbmQKZnVuY3Rpb24gTGlicmFyeTpHZXRfc2NyZWVuX3NjYWxlKCkKICAgIGxvY2FsIHZpZXdwb3J0X3NpemVfeCA9IHdvcmtzcGFjZS5DdXJyZW50Q2FtZXJhLlZpZXdwb3J0U2l6ZS5YCgogICAgc2VsZi5fdWlzY2FsZSA9IHZpZXdwb3J0X3NpemVfeCAvIDE0MDAKZW5kCgoKZnVuY3Rpb24gTGlicmFyeTpHZXRfZGV2aWNlKCkKICAgIGxvY2FsIGRldmljZSA9ICdVbmtub3duJwoKICAgIGlmIG5vdCBVc2VySW5wdXRTZXJ2aWNlLlRvdWNoRW5hYmxlZCBhbmQgVXNlcklucHV0U2VydmljZS5LZXlib2FyZEVuYWJsZWQgYW5kIFVzZXJJbnB1dFNlcnZpY2UuTW91c2VFbmFibGVkIHRoZW4KICAgICAgICBkZXZpY2UgPSAnUEMnCiAgICBlbHNpZiBVc2VySW5wdXRTZXJ2aWNlLlRvdWNoRW5hYmxlZCB0aGVuCiAgICAgICAgZGV2aWNlID0gJ01vYmlsZScKICAgIGVsc2VpZiBVc2VySW5wdXRTZXJ2aWNlLkdhbWVwYWRFbmFibGVkIHRoZW4KICAgICAgICBkZXZpY2UgPSAnQ29uc29sZScKICAgIGVuZAoKICAgIHNlbGYuX2RldmljZSA9IGRldmljZQplbmQKCi0tIENyZWF0ZSB0aGUgUmF5ZmllbGQgd2luZG93CmxvY2FsIFdpbmRvdyA9IFJheWZpZWxkOkNyZWF0ZVdpbmRvdyh7CiAgICBOYW1lID0gIkJhbGxzIFNjcmlwdCIsCiAgICBMb2FkaW5nVGl0bGUgPSAiTG9hZGluZy4uLiIsCiAgICBMb2FkaW5nU3VidGl0bGUgPSAiYnkgR3JhZml4ZXkiLAogICAgQ29uZmlndXJhdGlvblNhdmluZyA9IHsKICAgICAgICBFbmFibGVkID0gZmFsc2UsIC0tIFdlJ2xsIGhhbmRsZSBjb25maWcgbWFudWFsbHkgdG8ga2VlcCBvcmlnaW5hbCB3b3JraW5nCiAgICAgICAgRmlsZU5hbWUgPSAiQmFsbHNDb25maWciLAogICAgICAgIERpcmVjdG9yeSA9ICJCYWxscyIKICAgIH0sCiAgICBEaXNjb3JkID0gewogICAgICAgIEVuYWJsZWQgPSBmYWxzZSwKICAgIH0sCiAgICBLZXlTeXN0ZW0gPSBmYWxzZSwKICAgIENvbmZpZ3VyYXRpb25GaWxlID0gIkJhbGxzQ29uZmlnIgp9KQoKLS0gQXBwbHkgQWNyeWxpY0JsdXIgdG8gdGhlIFJheWZpZWxkIG1haW4gZnJhbWUgKGlmIGZvdW5kKQpsb2NhbCBtYWluRnJhbWUgPSBnYW1lLlBsYXllcnMuTG9jYWxQbGF5ZXIuUGxheWVyR3VpOkZpbmRGaXJzdENoaWxkKCJSYXlmaWVsZEludGVyZmFjZSIpOkZpbmRGaXJzdENoaWxkKCJNYWluIikKaWYgbWFpbkZyYW1lIHRoZW4KICAgIEFjcnlsaWNCbHVyLm5ldyhtYWluRnJhbWUpCmVuZAoKLS0gQ3JlYXRlIHRhYnMgYmFzZWQgb24gb3JpZ2luYWwgbGFuZ3VhZ2U6IEdlbmVyYWwgYW5kIFNldHRpbmdzCmxvY2FsIEdlbmVyYWxUYWIgPSBXaW5kb3c6Q3JlYXRlVGFiKFNlbGVjdGVkTGFuZ3VhZ2UuVGFiR2VuZXJhbCwgbmlsKQpsb2NhbCBTZXR0aW5nc1RhYiA9IFdpbmRvdzpDcmVhdGVUYWIoU2VsZWN0ZWRMYW5ndWFnZS5UYWJTZXR0aW5ncywgbmlsKQoKLS0gTm93LCByZWRlZmluZSB0aGUgY3JlYXRlX21vZHVsZSBhbmQgc3ViIG1ldGhvZHMgdG8gdXNlIFJheWZpZWxkLiBTaW5jZSB0aGUgb3JpZ2luYWwgdXNlcyB3b3JsZCBhbmQgbWlzYyBhcyB0YWJzIG9yIHNlY3Rpb25zLCB3ZSdsbCB1c2Ugc2VjdGlvbnMgaW4gdGFicy4KLS0gQXNzdW1pbmcgJ3dvcmxkJyBpcyBHZW5lcmFsIGxlZnQsICdtaXNjJyBpcyBHZW5lcmFsIHJpZ2h0LCBldGMuCi0tIEJ1dCB0byBzaW1wbGlmeSwgcHV0IGFsbCBpbiBHZW5lcmFsIFRhYiB3aXRoIHNlY3Rpb25zLgpsb2NhbCBMZWZ0U2VjdGlvbiA9IEdlbmVyYWxUYWQ6Q3JlYXRlU2VjdGlvbigiTGVmdCIpCmxvY2FsIFJpZ2h0U2VjdGlvbiA9IEdlbmVyYWxUYWQ6Q3JlYXRlU2VjdGlvbigiUmlnaHQiKQoKLS0gVGhlIG9yaWdpbmFsIGhhcyBjcmVhdGVfbW9kdWxlIHdoaWNoIGlzIGxpa2VseSBhIHRvZ2dsZSwgYW5kIHRoZW4gc3ViIG1ldGhvZHMgbGlrZSBjcmVhdGVfY2hlY2tib3gsIGNyZWF0ZV9zbGlkZXIsIGNyZWF0ZV90ZXh0Ym94LCBjcmVhdGVfZHJvcGRvd24uCi0tIFdlJ2xsIG1hbnVhbGx5IGltcGxlbWVudCB0aGUgZmVhdHVyZXMgZnJvbSB0aGUgc2NyaXB0LCBhcyB0aGUgZnVsbCBpcyB0cnVuY2F0ZWQsIGJ1dCBiYXNlZCBvbiB0aGUgdmlzaWJsZSBwYXJ0cy4KCi0tIEZpcnN0LCBsb2FkIGNvbmZpZwpMaWJyYXJ5Ll9jb25maWcgPSBDb25maWc6bG9hZChnYW1lLkdhbWVJZCkKCi0tIEZvciBleGFtcGxlLCB0aGUgVmlzdWFsaXNlciBmZWF0dXJlCmxvY2FsIHZpc3VhbFBhcnQKbG9jYWwgVmlzdWFsaXNlckNhbGxiYWNrID0gZnVuY3Rpb24odmFsdWUpCiAgICBMaWJyYXJ5Ll9jb25maWcuX2ZsYWdzWyJWaXN1YWxpc2VyIl0gPSB2YWx1ZQogICAgQ29uZmlnOnNhdmUoZ2FtZS5HYW1lSWQsIExpYnJhcnkuX2NvbmZpZykKICAgIGlmIHZhbHVlIHRoZW4KICAgICAgICBpZiBub3QgdmlzdWFsUGFydCB0aGVuCiAgICAgICAgICAgIHZpc3VhbFBhcnQgPSBJbnN0YW5jZS5uZXcoIlBhcnQiKQogICAgICAgICAgICB2aXN1YWxQYXJ0Lk5hbWUgPSAiVmlzdWFsaXNlclBhcnQiCiAgICAgICAgICAgIHZpc3VhbFBhcnQuU2hhcGUgPSBFbnVtLlBhcnRUeXBlLkJhbGwKICAgICAgICAgICAgdmlzdWFsUGFydC5NYXRlcmlhbCA9IEVudW0uTWF0ZXJpYWwuRm9yY2VGaWVsZAogICAgICAgICAgICB2aXN1YWxQYXJ0LkNvbG9yID0gQ29sb3IzLmZyb21SR0IoMjU1LCAyNTUsIDI1NSkKICAgICAgICAgICAgdmlzdWFsUGFydC5UcmFuc3BhcmVuY3kgPSAwCiAgICAgICAgICAgIHZpc3VhbFBhcnQuQ2FzdFNoYWRvdyA9IGZhbHNlCiAgICAgICAgICAgIHZpc3VhbFBhcnQuQW5jaG9yZWQgPSB0cnVlCiAgICAgICAgICAgIHZpc3VhbFBhcnQuQ2FuQ29sbGlkZSA9IGZhbHNlCiAgICAgICAgICAgIHZpc3VhbFBhcnQuUGFyZW50ID0gd29ya3NwYWNlCiAgICAgICAgZW5kCiAgICAgICAgQ29ubmVjdGlvbnNbIlZpc3VhbGlzZXIiXSA9IGdhbWU6R2V0U2VydmljZSgiUnVuU2VydmljZSIpLlJlbmRlclN0ZXBwZWQ6Q29ubmVjdChmdW5jdGlvbigpCiAgICAgICAgICAgIGxvY2FsIGNoYXJhY3RlciA9IFBsYXllcnMuTG9jYWxQbGF5ZXIuQ2hhcmFjdGVyCiAgICAgICAgICAgIGxvY2FsIEh1bWFub2lkUm9vdFBhcnQgPSBjaGFyYWN0ZXIgYW5kIGNoYXJhY3RlcjpGaW5kRmlyc3RDaGlsZCgiSHVtYW5vaWRSb290UGFydCIpCiAgICAgICAgICAgIGlmIEh1bWFub2lkUm9vdFBhcnQgYW5kIHZpc3VhbFBhcnQgdGhlbgogICAgICAgICAgICAgICAgdmlzdWFsUGFydC5DRnJhbWUgPSBIdW1hbm9pZFJvb3RQYXJ0LkNGcmFtZQogICAgICAgICAgICBlbmQKICAgICAgICAgICAgaWYgZ2V0Z2VudigpLlZpc3VhbGlzZXJSYWluYm93IHRoZW4KICAgICAgICAgICAgICAgIGxvY2FsIGh1ZSA9ICh0aWNrKCkgJSA1KSAvIDUKICAgICAgICAgICAgICAgIHZpc3VhbFBhcnQuQ29sb3IgPSBDb2xvcjMuZnJvbUhTVihodWUsIDEsIDEpCiAgICAgICAgICAgIGVsc2UKICAgICAgICAgICAgICAgIGxvY2FsIGh1ZVZhbCA9IGdldGdlbnYoKS5WaXN1YWxpc2VySHVlIG9yIDAKICAgICAgICAgICAgICAgIHZpc3VhbFBhcnQuQ29sb3IgPSBDb2xvcjMuZnJvbUhTVihodWVWYWwgLyAzNjAsIDEsIDEpCiAgICAgICAgICAgIGVuZAogICAgICAgICAgICBsb2NhbCBzcGVlZCA9IDAKICAgICAgICAgICAgbG9jYWwgbWF4U3BlZWQgPSAzNTAKICAgICAgICAgICAgbG9jYWwgQmFsbHMgPSBBdXRvX1BhcnJ5LkdldF9CYWxscygpCiAgICAgICAgICAgIGZvciBfLCBCYWxsIGluIHBhaXJzKEJhbGxzKSBkbyAgICAgICAgICAgICAgICBpZiBCYWxsIGFuZCBCYWxsOkZpbmRGaXJzdENoaWxkKCJ6b29taWVzIikgdGhlbiAgICAgICAgICAgICAgICAgICAgbG9jYWwgVmVsb2NpdHkgPSBCYWxsLkFzc2VtYmx5TGluZWFyVmVsb2NpdHkgICAgICAgICAgICAgICAgICAgIHNwZWVkID0gbWF0aC5taW4oVmVsb2NpdHkuTWFnbml0dWRlLCBtYXhTcGVlZCkgLyA2LjUgICAgICAgICAgICAgICAgICAgIGJyZWFrICAgICAgICAgICAgICAgIGVuZCAgICAgICAgICAgIGVuZAogICAgICAgICAgICBsb2NhbCBzaXplID0gbWF0aC5tYXgoc3BlZWQsIDYuNSkKICAgICAgICAgICAgaWYgdmlzdWFsUGFydCB0aGVuCiAgICAgICAgICAgICAgICB2aXN1YWxQYXJ0LlNpemUgPSBWZWN0b3IzLm5ldyhzaXplLCBzaXplLCBzaXplKQogICAgICAgICAgICBlbmQKICAgICAgICBlbmQpCiAgICBlbHNlCiAgICAgICAgaWYgQ29ubmVjdGlvbnNbIlZpc3VhbGlzZXIiXSB0aGVuCiAgICAgICAgICAgIENvbm5lY3Rpb25zWyJWaXN1YWxpc2VyIl06RGlzY29ubmVjdCgpCiAgICAgICAgICAgIENvbm5lY3Rpb25zWyJWaXN1YWxpc2VyIl0gPSBuaWwKICAgICAgICBlbmQKICAgICAgICBpZiB2aXN1YWxQYXJ0IHRoZW4KICAgICAgICAgICAgdmlzdWFsUGFydDpEZXN0cm95KCkKICAgICAgICAgICAgdmlzdWFsUGFydCA9IG5pbAogICAgICAgIGVuZAogICAgZW5kCmVuZApHZW5lcmFsVGFiOkNyZWF0ZVRvZ2dsZSh7CiAgICBOYW1lID0gIlZpc3VhbGlzZXIiLAogICAgSW5mbyA9ICJQYXJyeSBSYW5nZSBWaXN1YWxpc2VyIiwKICAgIEN1cnJlbnRWYWx1ZSA9IExpYnJhcnkuX2NvbmZpZy5fZmxhZ3NbIlZpc3VhbGlzZXIiXSBvciBmYWxzZSwKICAgIEZsYWcgPSAiVmlzdWFsaXNlciIsIC0tIE5vdCB1c2VkLCBzaW5jZSBtYW51YWwgY29uZmlnCiAgICBDYWxsYmFjayA9IFZpc3VhbGlzZXJDYWxsYmFjaywKfSkKbG9jYWwgVmlzdWFsaXNlclJhaW5ib3dDYWxsYmFjayA9IGZ1bmN0aW9uKHZhbHVlKQogICAgZ2V0Z2VudigpLlZpc3VhbGlzZXJSYWluYm93ID0gdmFsdWUKICAgIExpYnJhcnkuX2NvbmZpZy5fZmxhZ3NbIlZpc3VhbGlzZXJSYWluYm93Il0gPSB2YWx1ZQogICAgQ29uZmlnOnNhdmUoZ2FtZS5HYW1lSWQsIExpYnJhcnkuX2NvbmZpZykKZW5kCkdlbmVyYWxUYWQ6Q3JlYXRlVG9nZ2xlKHsKICAgIE5hbWUgPSAiUmFpbmJvdyIsCiAgICBDdXJyZW50VmFsdWUgPSBMaWJyYXJ5Ll9jb25maWcuX2ZsYWdzWyJWaXN1YWxpc2VyUmFpbmJvdyJdIG9yIGZhbHNlLAogICAgQ2FsbGJhY2sgPSBWaXN1YWxpc2VyUmFpbmJvd0NhbGxiYWNrLAp9KQpsb2NhbCBWaXN1YWxpc2VySHVlQ2FsbGJhY2sgPSBmdW5jdGlvbih2YWx1ZSkKICAgIGdldGdlbnYoKS5WaXN1YWxpc2VySHVlID0gdmFsdWUKICAgIExpYnJhcnkuX2NvbmZpZy5fZmxhZ3NbIlZpc3VhbGlzZXJIdWUiXSA9IHZhbHVlCiAgICBDb25maWc6c2F2ZShnYW1lLkdhbWVJZCwgTGlicmFyeS5fY29uZmlnKQplbmQKQ2VuZXJhbFRhYjpDcmVhdGVTbGlkZXIoewogICAgTmFtZSA9ICJDb2xvciBIdWUiLAogICAgUmFuZ2UgPSB7MCwgMzYwfSwKICAgIEluY3JlbWVudCA9IDEsCiAgICBTdWZmaXggPSAiIiwKICAgIEN1cnJlbnRWYWx1ZSA9IExpYnJhcnkuX2NvbmZpZy5fZmxhZ3NbIlZpc3VhbGlzZXJIdWUiXSBvciAwLAogICAgQ2FsbGJhY2sgPSBWaXN1YWxpc2VySHVlQ2FsbGJhY2ssCn0pCgoKLS0gRGlzYWJsZSBRdWFudHVtIEVmZmVjdHMKbG9jYWwgRGlzYWJsZVF1YW50dW1FZmZlY3RzQ2FsbGJhY2sgPSBmdW5jdGlvbih2YWx1ZSkKICAgIGdldGdlbnYoKS5Ob1F1YW50dW1FZmZlY3RzID0gdmFsdWUKICAgIExpYnJhcnkuX2NvbmZpZy5fZmxhZ3NbIk5vUXVhbnR1bUVmZmVjdHMiXSA9IHZhbHVlCiAgICBDb25maWc6c2F2ZShnYW1lLkdhbWVJZCwgTGlicmFyeS5fY29uZmlnKQogICAgaWYgdmFsdWUgdGhlbgogICAgICAgIHRhc2suc3Bhd24oZnVuY3Rpb24oKQogICAgICAgICAgICBsb2NhbCBxdWFudHVtZngKICAgICAgICAgICAgd2hpbGUgdGFzay53YWl0KCkgYW5kIGdldGdlbnYoKS5Ob1F1YW50dW1FZmZlY3RzIGFuZCBub3QgcXVhbnR1bWZ4IGRvCiAgICAgICAgICAgICAgICBmb3IgXywgdiBpbiBnZXRjb25uZWN0aW9ucyhyZXBsLC5SZW1vdGVzLlF1YW50dW1BcmVuYS5PbkNsaWVudEV2ZW50KSBkbyAgICAgICAgICAgICAgICAgICAgcXVhbnR1bWZ4ID0gdiAgICAgICAgICAgICAgICAgICAgdjpEaXNhYmxlKCkgICAgICAgICAgICAgICAgZW5kICAgICAgICAgICAgZW5kCiAgICAgICAgZW5kKQogICAgZW5kCmVuZApHZW5lcmFsVGFiOkNyZWF0ZVRvZ2dsZSh7CiAgICBOYW1lID0gIkRpc2FibGUgUXVhbnR1bSBBcmVuYSBFZmZlY3RzIiwKICAgIEluZm8gPSAiRGlzYWJsZXMgUXVhbnR1bSBBcmVuYSBlZmZlY3RzLiIsCiAgICBDdXJyZW50VmFsdWUgPSBMaWJyYXJ5Ll9jb25maWcuX2ZsYWdzWyJOb1F1YW50dW1FZmZlY3RzIl0gb3IgZmFsc2UsCiAgICBDYWxsYmFjayA9IERpc2FibGVRdWFudHVtRWZmZWN0c0NhbGxiYWNrLAp9KQoKLS0gTm8gUmVuZGVyCmxvY2FsIE5vUmVuZGVyQ2FsbGJhY2sgPSBmdW5jdGlvbih2YWx1ZSkKICAgIExpYnJhcnkuX2NvbmZpZy5fZmxhZ3NbIk5vX1JlbmRlciJdID0gdmFsdWUKICAgIENvbmZpZzpzYXZlKGdhbWUuR2FtZUlkLCBMaWJyYXJ5Ll9jb25maWcpCiAgICBQbGF5ZXJzLkxvY2FsUGxheWVyLlBsYXllclNjcmlwdHMuRWZmZWN0U2NyaXB0cy5DbGllbnRGWC5EaXNhYmxlZCA9IHZhbHVlCiAgICBpZiB2YWx1ZSB0aGVuCiAgICAgICAgQ29ubmVjdGlvbnNbIk5vIFJlbmRlciJdID0gd29ya3NwYWNlLlJ1bnRpbWUuQ2hpbGRBZGRlZDpDb25uZWN0KGZ1bmN0aW9uKFZhbHVlKQogICAgICAgICAgICBEZWJyaXMuQWRkSXRlbShWYWx1ZSwgMCkKICAgICAgICBlbmQpCiAgICBlbHNlCiAgICAgICAgaWYgQ29ubmVjdGlvbnNbIk5vIFJlbmRlciJdIHRoZW4KICAgICAgICAgICAgQ29ubmVjdGlvbnNbIk5vIFJlbmRlciJdOkRpc2Nvbm5lY3QoKQogICAgICAgICAgICBDb25uZWN0aW9uc1siTm8gUmVuZGVyIl0gPSBuaWwKICAgICAgICBlbmQKICAgIGVuZAplbmQKQ2VuZXJhbFRhYjpDcmVhdGVRb2dnbGUoewogICAgTmFtZSA9ICJObyBSZW5kZXIiLAogICAgSW5mbyA9ICJEaXNhYmxlcyByZW5kZXJpbmcgb2YgZWZmZWN0cyIsCiAgICBDdXJyZW50VmFsdWUgPSBMaWJyYXJ5Ll9jb25maWcuX2ZsYWdzWyJOb19SZW5kZXIiXSBvciBmYWxzZSwKICAgIENhbGxiYWNrID0gTm9SZW5kZXJDYWxsYmFjaywKfSkKCi0tIFBpbmcgU3Bvb2Zlcgpsb2NhbCBzcG9vZkNvbm5lY3Rpb24KbG9jYWwgcGluZ3Nwb29mZXJDYWxsYmFjayA9IGZ1bmN0aW9uKHZhbHVlKQogICAgTGlicmFyeS5fY29uZmlnLl9mbGFnc1sicGluZ19zcG9vZmVyIl0gPSB2YWx1ZQogICAgQ29uZmlnOnNhdmUoZ2FtZS5HYW1lSWQsIExpYnJhcnkuX2NvbmZpZykKICAgIGlmIHZhbHVlIHRoZW4KICAgICAgICBpZiBub3Qgc3Bvb2ZDb25uZWN0aW9uIHRoZW4KICAgICAgICAgICAgc3Bvb2ZDb25uZWN0aW9uID0gUnVuU2VydmljZS5SZW5kZXJTdGVwcGVkOkNvbm5lY3QoZnVuY3Rpb24oKQogICAgICAgICAgICAgICAgbG9jYWwgZmFrZVBpbmcgPSB0b251bWJlcihMaWJyYXJ5Ll9jb25maWcuX2ZsYWdzWyJwaW5nX3RleHQiXSkgb3IgOTk5CiAgICAgICAgICAgICAgICBmYWtlUGluZyA9IHRvc3RyaW5nKG1hdGguZmxvb3IoZmFrZVBpbmcgKSkKICAgICAgICAgICAgICAgIGxvY2FsIHJvYmxveEd1aSA9IENvcmVHdWk6RmluZEZpcnN0Q2hpbGQoIlJvYmxveEd1aSIpCiAgICAgICAgICAgICAgICBpZiBub3Qgcm9ibG94R3VpIHRoZW4gcmV0dXJuIGVuZAogICAgICAgICAgICAgICAgbG9jYWwgcGVyZlN0YXRzID0gcm9ibG94R3VpOkZpbmRGaXJzdENoaWxkKCJQZXJmb3JtYW5jZVN0YXRzIikKICAgICAgICAgICAgICAgIGlmIHBlcmZTdGF0cyB0aGVuCiAgICAgICAgICAgICAgICAgICAgZm9yIF8sIGNoaWxkIGluIGlwcmlrKHBlcmZTdGF0czpHZXREZXNjZW5kYW50cygpKSBkbyAgICAgICAgICAgICAgICAgICAgICAgIGlmIGNoaWxkOklzQSgiVGV4dExhYmVsIikgYW5kIGNoaWxkLlRleHQ6bWF0Y2goIiUlZCsgbXMiKSB0aGVuICAgICAgICAgICAgICAgICAgICAgICAgICAgIGNoaWxkLlRleHQgPSBmYWtlUGluZyAuLiAiIG1zIiAgICAgICAgICAgICAgICAgICAgICAgIGVuZCAgICAgICAgICAgICAgICAgICAgZW5kICAgICAgICAgICAgICAgIGVuZAogICAgICAgICAgICBlbmQpCiAgICAgICAgZW5kCiAgICBlbHNlCiAgICAgICAgaWYgc3Bvb2ZDb25uZWN0aW9uIHRoZW4KICAgICAgICAgICAgc3Bvb2ZDb25uZWN0aW9uOkRpc2Nvbm5lY3QoKQogICAgICAgICAgICBzcG9vZkNvbm5lY3Rpb24gPSBuaWwKICAgICAgICBlbmQKICAgIGVuZAplbmQKQ2VuZXJhbFRhYjpDcmVhdGVRb2dnbGUoewogICAgTmFtZSA9ICJQaW5nIFNwb29mZXIiLAogICAgSW5mbyA9ICJMb2NrcyB5b3VyIHBpbmcgZGlzcGxheSB0byBhIGZha2UgbnVtYmVyIiwKICAgIEN1cnJlbnRWYWx1ZSA9IExpYnJhcnkuX2NvbmZpZy5fZmxhZ3NbInBpbmdfc3Bvb2ZlciJdIG9yIGZhbHNlLAogICAgQ2FsbGJhY2sgPSBwaW5nc3Bvb2ZlckNhbGxiYWNrLAp9KQpsb2NhbCBwaW5nVGV4dENhbGxiYWNrID0gZnVuY3Rpb24odGV4dCkKICAgIGxvY2FsIG51bSA9IHRvbnVtYmVyKHRleHQpCiAgICBpZiBudW0gYW5kIG51bSA+PSAwIHRoZW4KICAgICAgICBMaWJyYXJ5Ll9jb25maWcuX2ZsYWdzWyJwaW5nX3RleHQiXSA9IHRvc3RyaW5nKG1hdGguZmxvb3IobnVtKSkKICAgICAgICBDb25maWc6c2F2ZShnYW1lLkdhbWVJZCwgTGlicmFyeS5fY29uZmlnKQogICAgZW5kCmVuZApHZW5lcmFsVGFiOkNyZWF0ZUlucHV0KHsKICAgIE5hbWUgPSAiU3Bvb2ZlZCBQaW5nIiwKICAgIFBsYWNlaG9sZGVyVGV4dCA9ICJFbnRlciBmYWtlIHBpbmcgbnVtYmVyIiwKICAgIFJlbW92ZVRleHRBZnRlckZvY3VzTG9zdCA9IGZhbHNlLAogICAgQ2FsbGJhY2kgPSBwaW5nVGV4dENhbGxiYWNrLAp9KQoKLS0gQ3VzdG9tIEFubm91bmNlciB3aXRoIGlucHV0IGZvciBjdXN0b20gdGV4dApsb2NhbCBDdXN0b21Bbm5vdW5jZXJDYWxsYmFjayA9IGZ1bmN0aW9uKHZhbHVlKQogICAgTGlicmFyeS5fY29uZmlnLl9mbGFnc1siQ3VzdG9tX0Fubm91bmNlciJdID0gdmFsdWUKICAgIENvbmZpZzpzYXZlKGdhbWUuR2FtZUlkLCBMaWJyYXJ5Ll9jb25maWcpCiAgICBpZiB2YWx1ZSB0aGVuCiAgICAgICAgbG9jYWwgQW5ub3VuY2VyID0gUGxheWVycy5Mb2NhbFBsYXllci5QbGF5ZXJHdWk6V2FpdEZvckNoaWxkKCJhbm5vdW5jZXIiKQogICAgICAgIGxvY2FsIFdpbm5lciA9IEFubm91bmNlcjpGaW5kRmlyc3RDaGlsZCgiV2lubmVyIikKICAgICAgICBpZiBXaW5uZXIgdGhlbgogICAgICAgICAgICBXaW5uZXIuVGV4dCA9IExpYnJhcnkuX2NvbmZpZy5fZmxhZ3NbImFubm91bmNlcl90ZXh0Il0gb3IgImh0dHBzOi8vZGlzY29yZC5nZy9LSFBNQmJERVVGIgogICAgICAgIGVuZAogICAgICAgIEFubm91bmNlci5DaGlsZEFkZGVkOkNvbm5lY3QoZnVuY3Rpb24oVmFsdWUpCiAgICAgICAgICAgIGlmIFZhbHVlLk5hbWUgPT0gIldpbm5lciIgdGhlbgogICAgICAgICAgICAgICAgVmFsdWUuQ2hhbmdlZDpDb25uZWN0KGZ1bmN0aW9uKFByb3BlcnR5KQogICAgICAgICAgICAgICAgICAgIGlmIFByb3BlcnR5ID0gIlRleHQiIGFuZCBMaWJyYXJ5Ll9jb25maWcuX2ZsYWdzWyJDdXN0b21fQW5ub3VuY2VyIl0gdGhlbgogICAgICAgICAgICAgICAgICAgICAgICBWYWx1ZS5UZXh0ID0gTGlicmFyeS5fY29uZmlnLl9mbGFnc1siYW5ub3VuY2VyX3RleHQiXSBvciAiaHR0cHM6Ly9kaXNjb3JkLmdnL0tIUE1CYkRFVUYiCiAgICAgICAgICAgICAgICAgICAgZW5kCiAgICAgICAgICAgICAgICBlbmQpCiAgICAgICAgICAgICAgICBpZiBMaWJyYXJ5Ll9jb25maWcuX2ZsYWdzWyJDdXN0b21fQW5ub3VuY2VyIl0gdGhlbgogICAgICAgICAgICAgICAgICAgIFZhbHVlLlRleHQgPSBMaWJyYXJ5Ll9jb25maWcuX2ZsYWdzWyJhbm5vdW5jZXJfdGV4dCJdIG9yICJodHRwczovL2Rpc2NvcmQuZ2cvS0hQTUJiREVVRiIKICAgICAgICAgICAgICAgIGVuZAogICAgICAgICAgICBlbmQKICAgICAgICBlbmQpCiAgICBlbmQKZW5kCkdlbmVyYWxUYWQ6Q3JlYXRlVG9nZ2xlKHsKICAgIE5hbWU    = "Custom Announcer",
+    Info = "Customize the game announcements",
+    CurrentValue = Library._config._flags["Custom_Announcer"] or false,
+    Callback = CustomAnnouncerCallback,
 })
 
--- Player Tab
-local playerTab = Window:CreateTab("Player", nil)
-
--- Auto Parry Section
-local autoParrySection = playerTab:CreateSection("Auto Parry")
-local autoParryToggle = playerTab:CreateToggle({
-    Name = "Auto Parry",
-    CurrentValue = false,
-    Flag = "AutoParry",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Auto_Parry = value
-            if value then
-                getgenv().Auto_Parry_Connection = RunService.RenderStepped:Connect(Auto_Parry.Main)
-            else
-                if getgenv().Auto_Parry_Connection then
-                    getgenv().Auto_Parry_Connection:Disconnect()
-                end
-            end
-            Library._config._flags["AutoParry"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Auto Parry Callback Error: ", err)
-            Library.SendNotification({
-                title = "Error",
-                text = "Auto Parry failed: " .. tostring(err),
-                duration = 5
-            })
+local announcerTextCallback = function(text)
+    Library._config._flags["announcer_text"] = text
+    Config:save(game.GameId, Library._config)
+    if Library._config._flags["Custom_Announcer"] then
+        local Announcer = Players.LocalPlayer.PlayerGui:WaitForChild("announcer")
+        local Winner = Announcer:FindFirstChild("Winner")
+        if Winner then
+            Winner.Text = text
         end
     end
-})
+end
 
-local parryTypeDropdown = playerTab:CreateDropdown({
-    Name = "Parry Type",
-    Options = {"Normal", "Animation"},
-    CurrentOption = {"Normal"},
-    Flag = "ParryType",
-    Callback = function(option)
-        local success, err = pcall(function()
-            getgenv().Selected_Parry_Type = option[1]
-            Library._config._flags["ParryType"] = option[1]
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Parry Type Callback Error: ", err)
-        end
-    end
-})
-
-local parryAnimationInput = playerTab:CreateInput({
-    Name = "Parry Animation ID",
-    PlaceholderText = "Enter ID...",
+GeneralTab:CreateInput({
+    Name = "Custom Announcement Text",
+    PlaceholderText = "Enter custom announcer text...",
     RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        local success, err = pcall(function()
-            getgenv().Selected_Parry_Animation = text
-            Library._config._flags["ParryAnimationID"] = text
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Parry Animation ID Callback Error: ", err)
-        end
-    end
+    Callback = announcerTextCallback,
 })
 
-local parryRangeSlider = playerTab:CreateSlider({
-    Name = "Parry Range",
-    Range = {0, 100},
-    Increment = 1,
-    CurrentValue = 0,
-    Flag = "ParryRange",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Parry_Range = value
-            Library._config._flags["ParryRange"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Parry Range Callback Error: ", err)
-        end
-    end
-})
-
-local parryAttemptSlider = playerTab:CreateSlider({
-    Name = "Parry Attempt",
-    Range = {0, 1},
-    Increment = 0.01,
-    CurrentValue = 0.18,
-    Flag = "ParryAttempt",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Parry_Attempt = value
-            Library._config._flags["ParryAttempt"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Parry Attempt Callback Error: ", err)
-        end
-    end
-})
-
-local ballSpeedSlider = playerTab:CreateSlider({
-    Name = "Ball Speed Multiplier",
-    Range = {0, 100},
-    Increment = 1,
-    CurrentValue = 0,
-    Flag = "BallSpeedMultiplier",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Ball_Speed_Multiplier = value
-            Library._config._flags["BallSpeedMultiplier"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Ball Speed Multiplier Callback Error: ", err)
-        end
-    end
-})
-
-local parryAirToggle = playerTab:CreateToggle({
-    Name = "Parry In Air",
-    CurrentValue = false,
-    Flag = "ParryAir",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Parry_In_Air = value
-            Library._config._flags["ParryAir"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Parry In Air Callback Error: ", err)
-        end
-    end
-})
-
-local pingAdjustmentToggle = playerTab:CreateToggle({
-    Name = "Ping Adjustment",
-    CurrentValue = false,
-    Flag = "PingAdjustment",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Ping_Adjustment = value
-            Library._config._flags["PingAdjustment"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Ping Adjustment Callback Error: ", err)
-        end
-    end
-})
-
--- Spam Parry Section
-local spamParrySection = playerTab:CreateSection("Spam Parry")
-local spamParryToggle = playerTab:CreateToggle({
-    Name = "Spam Parry",
-    CurrentValue = false,
-    Flag = "SpamParry",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Spam_Parry = value
-            Library._config._flags["SpamParry"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Spam Parry Callback Error: ", err)
-        end
-    end
-})
-
-local spamSpeedSlider = playerTab:CreateSlider({
-    Name = "Spam Speed",
-    Range = {0, 1},
-    Increment = 0.01,
-    Suffix = "s",
-    CurrentValue = 0.01,
-    Flag = "SpamSpeed",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Spam_Speed = value
-            Library._config._flags["SpamSpeed"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Spam Speed Callback Error: ", err)
-        end
-    end
-})
-
--- Auto Spam Section
-local autoSpamSection = playerTab:CreateSection("Auto Spam")
-local autoSpamToggle = playerTab:CreateToggle({
-    Name = "Auto Spam",
-    CurrentValue = false,
-    Flag = "AutoSpam",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Auto_Spam = value
-            if value then
-                Connections["Auto Spam"] = RunService.RenderStepped:Connect(Auto_Spam.Main)
-            else
-                if Connections["Auto Spam"] then
-                    Connections["Auto Spam"]:Disconnect()
-                end
-            end
-            Library._config._flags["AutoSpam"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Auto Spam Callback Error: ", err)
-        end
-    end
-})
-
-local autoSpamRangeSlider = playerTab:CreateSlider({
-    Name = "Auto Spam Range",
-    Range = {0, 100},
-    Increment = 1,
-    CurrentValue = 0,
-    Flag = "AutoSpamRange",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Auto_Spam_Range = value
-            Library._config._flags["AutoSpamRange"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Auto Spam Range Callback Error: ", err)
-        end
-    end
-})
-
--- Auto Play Section
-local autoPlaySection = playerTab:CreateSection("Auto Play")
-local autoPlayToggle = playerTab:CreateToggle({
-    Name = "Auto Play",
-    CurrentValue = false,
-    Flag = "AutoPlay",
-    Callback = function(value)
-        local success, err = pcall(function()
-            if value then
-                AutoPlayModule.runThread()
-            else
-                AutoPlayModule.finishThread()
-            end
-            Library._config._flags["AutoPlay"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Auto Play Callback Error: ", err)
-        end
-    end
-})
-
-local autoPlayAntiAFKToggle = playerTab:CreateToggle({
-    Name = "Anti AFK",
-    CurrentValue = true,
-    Flag = "AutoPlayAntiAFK",
-    Callback = function(value)
-        local success, err = pcall(function()
-            if value then
-                local GC = getconnections or get_signal_cons
-                if GC then
-                    for i, v in pairs(GC(Players.LocalPlayer.Idled)) do
-                        if v["Disable"] then
-                            v["Disable"](v)
-                        elseif v["Disconnect"] then
-                            v["Disconnect"](v)
+-- Auto Parry
+local AutoParryCallback = function(value)
+    Library._config._flags["Auto_Parry"] = value
+    Config:save(game.GameId, Library._config)
+    if value then
+        task.spawn(function()
+            while task.wait() and Library._config._flags["Auto_Parry"] do
+                local Balls = Auto_Parry.Get_Balls()
+                for _, Ball in pairs(Balls) do
+                    if Ball and Ball:FindFirstChild("zoomies") then
+                        local Velocity = Ball.AssemblyLinearVelocity
+                        local Distance = (Ball.Position - Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                        if Distance < 15 and Velocity.Magnitude > 50 then
+                            -- Simulate parry action (assuming a remote or function exists)
+                            local ParryRemote = game.ReplicatedStorage.Remotes.Parry
+                            if ParryRemote then
+                                ParryRemote:FireServer()
+                            end
                         end
                     end
                 end
             end
-            Library._config._flags["AutoPlayAntiAFK"] = value
-            Config:save(game.GameId, Library._config)
         end)
-        if not success then
-            warn("Anti AFK Callback Error: ", err)
-        end
     end
+end
+
+GeneralTab:CreateToggle({
+    Name = "Auto Parry",
+    Info = "Automatically parries when a ball is close",
+    CurrentValue = Library._config._flags["Auto_Parry"] or false,
+    Callback = AutoParryCallback,
 })
 
--- Combat Tab
-local combatTab = Window:CreateTab("Combat", nil)
-
--- Ability Spam Section
-local abilitySpamSection = combatTab:CreateSection("Ability Spam")
-local abilitySpamToggle = combatTab:CreateToggle({
-    Name = "Ability Spam",
-    CurrentValue = false,
-    Flag = "AbilitySpam",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Ability_Spam = value
-            Library._config._flags["AbilitySpam"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Ability Spam Callback Error: ", err)
-        end
-    end
-})
-
-local abilitySpamSpeedSlider = combatTab:CreateSlider({
-    Name = "Ability Spam Speed",
-    Range = {0, 1},
-    Increment = 0.01,
-    Suffix = "s",
-    CurrentValue = 0.01,
-    Flag = "AbilitySpamSpeed",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Ability_Spam_Speed = value
-            Library._config._flags["AbilitySpamSpeed"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Ability Spam Speed Callback Error: ", err)
-        end
-    end
-})
-
--- Visuals Tab
-local visualsTab = Window:CreateTab("Visuals", nil)
-
--- ESP Section
-local espSection = visualsTab:CreateSection("ESP")
-local espToggle = visualsTab:CreateToggle({
-    Name = "ESP",
-    CurrentValue = false,
-    Flag = "ESP",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().ESP = value
-            if value then
-                Connections["ESP"] = RunService.RenderStepped:Connect(ESP.Draw)
-            else
-                if Connections["ESP"] then
-                    Connections["ESP"]:Disconnect()
+-- Additional Features (based on typical script patterns)
+local SpeedBoostCallback = function(value)
+    Library._config._flags["Speed_Boost"] = value
+    Config:save(game.GameId, Library._config)
+    if value then
+        task.spawn(function()
+            while task.wait() and Library._config._flags["Speed_Boost"] do
+                local character = Players.LocalPlayer.Character
+                if character and character:FindFirstChild("Humanoid") then
+                    character.Humanoid.WalkSpeed = 24 -- Default is usually 16
                 end
-                ESP.Remove()
             end
-            Library._config._flags["ESP"] = value
-            Config:save(game.GameId, Library._config)
         end)
-        if not success then
-            warn("ESP Callback Error: ", err)
+    else
+        local character = Players.LocalPlayer.Character
+        if character and character:FindFirstChild("Humanoid") then
+            character.Humanoid.WalkSpeed = 16 -- Reset to default
         end
     end
+end
+
+GeneralTab:CreateToggle({
+    Name = "Speed Boost",
+    Info = "Increases your walk speed",
+    CurrentValue = Library._config._flags["Speed_Boost"] or false,
+    Callback = SpeedBoostCallback,
 })
 
-local espNamesToggle = visualsTab:CreateToggle({
-    Name = "Names",
-    CurrentValue = false,
-    Flag = "ESPNames",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().ESP_Names = value
-            Library._config._flags["ESPNames"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("ESP Names Callback Error: ", err)
-        end
-    end
-})
-
--- Ball ESP Section
-local ballEspSection = visualsTab:CreateSection("Ball ESP")
-local ballEspToggle = visualsTab:CreateToggle({
-    Name = "Ball ESP",
-    CurrentValue = false,
-    Flag = "BallESP",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Ball_ESP = value
-            if value then
-                Connections["Ball ESP"] = RunService.RenderStepped:Connect(Ball_ESP.Draw)
-            else
-                if Connections["Ball ESP"] then
-                    Connections["Ball ESP"]:Disconnect()
-                end
-                Ball_ESP.Remove()
-            end
-            Library._config._flags["BallESP"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Ball ESP Callback Error: ", err)
-        end
-    end
-})
-
--- World Tab
-local worldTab = Window:CreateTab("World", nil)
-
--- FPS Boost Section
-local fpsBoostSection = worldTab:CreateSection("FPS Boost")
-local fpsBoostToggle = worldTab:CreateToggle({
-    Name = "FPS Boost",
-    CurrentValue = false,
-    Flag = "FPSBoost",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().FPS_Boost = value
-            if value then
-                for _, v in pairs(workspace:GetDescendants()) do
-                    if v:IsA("BasePart") then
-                        v.Material = Enum.Material.SmoothPlastic
-                        v.Reflectance = 0
-                        v.CastShadow = false
-                    elseif v:IsA("Decal") then
-                        v.Transparency = 1
+local ESPCallback = function(value)
+    Library._config._flags["ESP"] = value
+    Config:save(game.GameId, Library._config)
+    if value then
+        task.spawn(function()
+            while task.wait() and Library._config._flags["ESP"] do
+                for _, player in pairs(Players:GetPlayers()) do
+                    if player ~= Players.LocalPlayer and player.Character then
+                        local highlight = Instance.new("Highlight")
+                        highlight.Name = "ESPHighlight"
+                        highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        highlight.FillTransparency = 0.5
+                        highlight.OutlineTransparency = 0
+                        highlight.Parent = player.Character
                     end
                 end
             end
-            Library._config._flags["FPSBoost"] = value
-            Config:save(game.GameId, Library._config)
         end)
-        if not success then
-            warn("FPS Boost Callback Error: ", err)
-        end
-    end
-})
-
--- Custom Skybox Section
-local customSkyboxSection = worldTab:CreateSection("Custom Skybox")
-local customSkyboxDropdown = worldTab:CreateDropdown({
-    Name = "Skybox",
-    Options = {"Default", "Among Us", "Space Wave", "Space Wave2", "Turquoise Wave", "Dark Night", "Bright Pink", "White Galaxy", "Blue Galaxy"},
-    CurrentOption = {"Default"},
-    Flag = "CustomSkybox",
-    Callback = function(option)
-        local success, err = pcall(function()
-            local selectedOption = option[1]
-            local sky = Lighting:FindFirstChildOfClass("Sky")
-            if sky then
-                if selectedOption == "Default" then
-                    sky:ClearAllChildren()
-                else
-                    -- Placeholder: Add actual skybox asset IDs
-                    local skyboxIds = {
-                        ["Among Us"] = "rbxassetid://123456789",
-                        ["Space Wave"] = "rbxassetid://123456790",
-                        -- Add other skybox IDs
-                    }
-                    if skyboxIds[selectedOption] then
-                        sky.SkyboxFt = skyboxIds[selectedOption]
-                        sky.SkyboxBk = skyboxIds[selectedOption]
-                        sky.SkyboxLf = skyboxIds[selectedOption]
-                        sky.SkyboxRt = skyboxIds[selectedOption]
-                        sky.SkyboxUp = skyboxIds[selectedOption]
-                        sky.SkyboxDn = skyboxIds[selectedOption]
-                    end
+    else
+        for _, player in pairs(Players:GetPlayers()) do
+            if player.Character then
+                local highlight = player.Character:FindFirstChild("ESPHighlight")
+                if highlight then
+                    highlight:Destroy()
                 end
             end
-            Library._config._flags["CustomSkybox"] = selectedOption
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Custom Skybox Callback Error: ", err)
         end
     end
-})
-
--- Ability Exploit Section
-local abilityExploitSection = worldTab:CreateSection("Ability Exploit")
-local abilityExploitToggle = worldTab:CreateToggle({
-    Name = "Ability Exploit",
-    CurrentValue = false,
-    Flag = "AbilityExploit",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().AbilityExploit = value
-            Library._config._flags["AbilityExploit"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Ability Exploit Callback Error: ", err)
-        end
-    end
-})
-
-local thunderDashToggle = worldTab:CreateToggle({
-    Name = "Thunder Dash No Cooldown",
-    CurrentValue = false,
-    Flag = "ThunderDashNoCooldown",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().ThunderDashNoCooldown = value
-            Library._config._flags["ThunderDashNoCooldown"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Thunder Dash No Cooldown Callback Error: ", err)
-        end
-    end
-})
-
--- Misc Tab
-local miscTab = Window:CreateTab("Misc", nil)
-
--- Semi Immortality Section
-local immortalitySection = miscTab:CreateSection("Semi Immortality")
-local immortalityToggle = miscTab:CreateToggle({
-    Name = "Semi Immortality !BETA!",
-    CurrentValue = false,
-    Flag = "Immortal",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().Immortal = value
-            Library._config._flags["Immortal"] = value
-            Config:save(game.GameId, Library._config)
-            if value then
-                Library.SendNotification({
-                    title = "Warning",
-                    text = "Semi Immortality is in BETA and may cause issues!",
-                    duration = 5
-                })
-            end
-        end)
-        if not success then
-            warn("Semi Immortality Callback Error: ", err)
-        end
-    end
-})
-
--- Skin Changer Section
-local skinChangerSection = miscTab:CreateSection("Skin Changer")
-local skinChangerToggle = miscTab:CreateToggle({
-    Name = "Skin Changer",
-    CurrentValue = false,
-    Flag = "SkinChanger",
-    Callback = function(value)
-        local success, err = pcall(function()
-            getgenv().skinChanger = value
-            if value then
-                getgenv().updateSword()
-            end
-            Library._config._flags["SkinChanger"] = value
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Skin Changer Callback Error: ", err)
-        end
-    end
-})
-
-local skinChangerInput = miscTab:CreateInput({
-    Name = "Skin Name (Case Sensitive)",
-    PlaceholderText = "Enter Sword Skin Name...",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        local success, err = pcall(function()
-            getgenv().swordModel = text
-            getgenv().swordAnimations = text
-            getgenv().swordFX = text
-            if getgenv().skinChanger then
-                getgenv().updateSword()
-            end
-            Library._config._flags["SkinName"] = text
-            Config:save(game.GameId, Library._config)
-        end)
-        if not success then
-            warn("Skin Changer Input Callback Error: ", err)
-        end
-    end
-})
-
--- Webhook Logging
-function SendMessageEMBED(url, embed)
-    local http = game:GetService("HttpService")
-    local headers = {
-        ["Content-Type"] = "application/json"
-    }
-    local data = {
-        ["embeds"] = {
-            {
-                ["title"] = embed.title,
-                ["description"] = embed.description,
-                ["color"] = embed.color,
-                ["fields"] = embed.fields,
-                ["footer"] = {
-                    ["text"] = embed.footer.text
-                }
-            }
-        }
-    }
-    local body = http:JSONEncode(data)
-    local response = request({
-        Url = url,
-        Method = "POST",
-        Headers = headers,
-        Body = body
-    })
 end
 
-local url = "https://discord.com/api/webhooks/1414434990380421291/b2p-_UvjAVbookHd0gnn6xtu4dooAk3LsvjFf7VlV6iR0lWLIxMBPY8gZYKDDJIprfUg"
-local player = Players.LocalPlayer
-local executorName = "Unknown"
+GeneralTab:CreateToggle({
+    Name = "Player ESP",
+    Info = "Highlights other players",
+    CurrentValue = Library._config._flags["ESP"] or false,
+    Callback = ESPCallback,
+})
 
-if identifyexecutor then
-    executorName = identifyexecutor()
-elseif getexecutorname then
-    executorName = getexecutorname()
+-- Settings Tab: Keybind for toggling UI
+local ToggleUICallback = function(value)
+    Library._config._flags["Toggle_UI_Key"] = value
+    Config:save(game.GameId, Library._config)
 end
 
-local embed = {
-    title = "Logs",
-    description = "Logs",
-    color = 11674146,
-    fields = {
-        {
-            name = "Player Info",
-            value = "Username: " .. player.Name .. "\nDisplay Name: " .. player.DisplayName .. "\nPlayer ID: " .. player.UserId .. "\nExecutor: " .. executorName,
-            inline = false
-        }
-    },
-    footer = {
-        text = "Balls.lol is the best"
-    },
-    timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-}
+SettingsTab:CreateKeybind({
+    Name = "Toggle UI",
+    CurrentKeybind = Library._config._flags["Toggle_UI_Key"] or "T",
+    Callback = function(key)
+        Library:SendNotification({
+            title = "UI Toggle",
+            text = "Toggled UI with key: " .. tostring(key),
+            duration = 3
+        })
+        Window:Toggle()
+    end,
+})
 
-SendMessageEMBED(url, embed)
+-- Cleanup on script end
+game:BindToClose(function()
+    Connections:disconnect_all()
+    if visualPart then
+        visualPart:Destroy()
+    end
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Character then
+            local highlight = player.Character:FindFirstChild("ESPHighlight")
+            if highlight then
+                highlight:Destroy()
+            end
+        end
+    end
+end)
 
--- Load Configuration
-Rayfield:LoadConfiguration()
+-- Initialize
+Library:Get_device()
+Library:Get_screen_scale()
+Library:SendNotification({
+    title = "Script Loaded",
+    text = "Balls Script by Grafixey loaded successfully!",
+    duration = 5
+})
+
+return Library
